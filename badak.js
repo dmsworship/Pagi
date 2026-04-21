@@ -31,10 +31,95 @@ const rl = readline.createInterface({
 
 const question = (text) => new Promise(resolve => rl.question(text, resolve));
 
-const HISTORY_FILE = './nomor_testing.txt';
+// Daftar 10 teks berbeda
+const listPesan = [
+    "Halo, ini pesan ke-1",
+    "Lagi apa? (pesan 2)",
+    "Cek ombak dulu gan (pesan 3)",
+    "Jangan lupa kopi (pesan 4)",
+    "Tes koneksi stabil (pesan 5)",
+    "Masih aman ya? (pesan 6)",
+    "Otomatisasi Baileys (pesan 7)",
+    "Hampir selesai nih (pesan 8)",
+    "Pesan kesembilan hadir (pesan 9)",
+    "Selesai! Sampai jumpa (pesan 10)"
+];
 
-function loadHistoryTargets() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
+async function sendWithRetry(sock, jid, content, maxRetry = 3) {
+    let attempt = 0;
+    while (attempt < maxRetry) {
+        try {
+            // Hapus typing update agar lebih cepat jika ingin mengejar waktu
+            await sock.sendMessage(jid, content);
+            return true;
+        } catch (e) {
+            attempt++;
+            await delay(1000);
+        }
+    }
+    return false;
+}
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
+        },
+        browser: Browsers.ubuntu('Chrome'),
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    if (!sock.authState.creds.registered) {
+        const nomor = await question('Nomor kamu (628xxx): ');
+        const code = await sock.requestPairingCode(nomor);
+        console.log(`\nKode Pairing Anda: ${code}\n`);
+    }
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection } = update;
+        if (connection === 'close') startBot();
+        if (connection === 'open') console.log('Bot terhubung dan siap digunakan!');
+    });
+
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg || !msg.message) return;
+
+        const remoteJid = msg.key.remoteJid;
+        const isFromMe = msg.key.fromMe;
+        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+
+        // CARA PAKAI: Ketik "!spam" di chat target atau chat sendiri
+        if (text.startsWith('!spam')) {
+            console.log(`[START] Mengirim 10 pesan ke ${remoteJid}`);
+
+            for (let i = 0; i < listPesan.length; i++) {
+                const ok = await sendWithRetry(sock, remoteJid, { text: listPesan[i] });
+                
+                if (ok) {
+                    console.log(`[OK] Terkirim pesan ke-${i + 1}`);
+                } else {
+                    console.log(`[FAIL] Gagal pesan ke-${i + 1}`);
+                }
+
+                // Jeda 1 detik (1000ms). 
+                // 10 pesan x 1 detik = 10 detik total.
+                await delay(1000); 
+            }
+
+            console.log(`[DONE] Semua pesan selesai dikirim.`);
+        }
+    });
+}
+
+startBot();    if (!fs.existsSync(HISTORY_FILE)) return [];
     return fs.readFileSync(HISTORY_FILE, 'utf-8')
         .split('\n')
         .filter(x => x.trim().endsWith('@s.whatsapp.net'));
