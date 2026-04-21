@@ -31,95 +31,24 @@ const rl = readline.createInterface({
 
 const question = (text) => new Promise(resolve => rl.question(text, resolve));
 
-// Daftar 10 teks berbeda
+// --- DAFTAR 10 TEKS BERBEDA ---
 const listPesan = [
     "Halo, ini pesan ke-1",
-    "Lagi apa? (pesan 2)",
-    "Cek ombak dulu gan (pesan 3)",
-    "Jangan lupa kopi (pesan 4)",
-    "Tes koneksi stabil (pesan 5)",
-    "Masih aman ya? (pesan 6)",
-    "Otomatisasi Baileys (pesan 7)",
-    "Hampir selesai nih (pesan 8)",
-    "Pesan kesembilan hadir (pesan 9)",
-    "Selesai! Sampai jumpa (pesan 10)"
+    "Lagi apa di sana? (2)",
+    "Cek ombak dulu ya (3)",
+    "Jangan lupa istirahat (4)",
+    "Tes koneksi otomatis (5)",
+    "Sudah masuk pesannya? (6)",
+    "Running on Termux (7)",
+    "Hampir selesai bos (8)",
+    "Pesan ke-9 terkirim (9)",
+    "Selesai! 10 pesan tuntas (10)"
 ];
 
-async function sendWithRetry(sock, jid, content, maxRetry = 3) {
-    let attempt = 0;
-    while (attempt < maxRetry) {
-        try {
-            // Hapus typing update agar lebih cepat jika ingin mengejar waktu
-            await sock.sendMessage(jid, content);
-            return true;
-        } catch (e) {
-            attempt++;
-            await delay(1000);
-        }
-    }
-    return false;
-}
+const HISTORY_FILE = './nomor_testing.txt';
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-    const { version } = await fetchLatestBaileysVersion();
-
-    const sock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
-        },
-        browser: Browsers.ubuntu('Chrome'),
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
-    if (!sock.authState.creds.registered) {
-        const nomor = await question('Nomor kamu (628xxx): ');
-        const code = await sock.requestPairingCode(nomor);
-        console.log(`\nKode Pairing Anda: ${code}\n`);
-    }
-
-    sock.ev.on('connection.update', (update) => {
-        const { connection } = update;
-        if (connection === 'close') startBot();
-        if (connection === 'open') console.log('Bot terhubung dan siap digunakan!');
-    });
-
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
-        if (!msg || !msg.message) return;
-
-        const remoteJid = msg.key.remoteJid;
-        const isFromMe = msg.key.fromMe;
-        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-
-        // CARA PAKAI: Ketik "!spam" di chat target atau chat sendiri
-        if (text.startsWith('!spam')) {
-            console.log(`[START] Mengirim 10 pesan ke ${remoteJid}`);
-
-            for (let i = 0; i < listPesan.length; i++) {
-                const ok = await sendWithRetry(sock, remoteJid, { text: listPesan[i] });
-                
-                if (ok) {
-                    console.log(`[OK] Terkirim pesan ke-${i + 1}`);
-                } else {
-                    console.log(`[FAIL] Gagal pesan ke-${i + 1}`);
-                }
-
-                // Jeda 1 detik (1000ms). 
-                // 10 pesan x 1 detik = 10 detik total.
-                await delay(1000); 
-            }
-
-            console.log(`[DONE] Semua pesan selesai dikirim.`);
-        }
-    });
-}
-
-startBot();    if (!fs.existsSync(HISTORY_FILE)) return [];
+function loadHistoryTargets() {
+    if (!fs.existsSync(HISTORY_FILE)) return [];
     return fs.readFileSync(HISTORY_FILE, 'utf-8')
         .split('\n')
         .filter(x => x.trim().endsWith('@s.whatsapp.net'));
@@ -140,26 +69,18 @@ function getText(msg) {
     );
 }
 
-async function sendWithRetry(sock, jid, content, maxRetry = 5) {
-    let attempt = 0;
-    while (attempt < maxRetry) {
-        try {
-            await sock.sendPresenceUpdate('composing', jid);
-            await delay(800);
-            await sock.sendMessage(jid, content);
-            await sock.readMessages([{ remoteJid: jid }]);
-            return true;
-        } catch {
-            attempt++;
-            const delayTime = Math.pow(2, attempt) * 1000;
-            await delay(delayTime);
-        }
+// Optimasi Fungsi Kirim: Tanpa delay tambahan agar bisa 1 detik per pesan
+async function quickSend(sock, jid, content) {
+    try {
+        // Kita hapus 'composing' agar tidak membuang waktu
+        await sock.sendMessage(jid, content);
+        return true;
+    } catch (e) {
+        return false;
     }
-    return false;
 }
 
 async function startBot() {
-
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     const { version } = await fetchLatestBaileysVersion();
 
@@ -183,12 +104,8 @@ async function startBot() {
 
     sock.ev.on('connection.update', (update) => {
         const { connection } = update;
-
         if (connection === 'close') startBot();
-
-        if (connection === 'open') {
-            console.log('Bot terhubung');
-        }
+        if (connection === 'open') console.log('Bot terhubung!');
     });
 
     sock.ev.on('messages.upsert', async (m) => {
@@ -201,25 +118,27 @@ async function startBot() {
         const isFromMe = msg.key?.fromMe;
         const text = getText(msg);
 
-        if (text === '!ping_test' && isFromMe) {
+        // TRIGGER: Ketik !spam di chat target atau nomor sendiri
+        if (text === '!spam' && isFromMe) {
+            console.log(`[START] Mengirim 10 pesan ke ${jid}`);
 
-            const targets = loadHistoryTargets();
+            for (let i = 0; i < listPesan.length; i++) {
+                const startTime = Date.now();
+                
+                const ok = await quickSend(sock, jid, { text: listPesan[i] });
+                
+                if (ok) console.log(`[${i + 1}] Terkirim: ${listPesan[i]}`);
+                else console.log(`[${i + 1}] Gagal mengirim.`);
 
-            console.log(`[PING] total ${targets.length}`);
-
-            for (let t of targets) {
-
-                const ok = await sendWithRetry(sock, t, {
-                    text: 'Kabarnya gimana kamuP'
-                });
-
-                if (ok) console.log(`[OK] ${t}`);
-                else console.log(`[FAIL] ${t}`);
-
-                await delay(2000);
+                // Menghitung sisa waktu agar pas 1 detik (1000ms)
+                const endTime = Date.now();
+                const executionTime = endTime - startTime;
+                const remainingDelay = Math.max(0, 1000 - executionTime);
+                
+                await delay(remainingDelay);
             }
 
-            console.log(`[DONE] ping selesai`);
+            console.log(`[DONE] 10 pesan selesai dalam ~10 detik`);
         }
     });
 }
