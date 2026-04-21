@@ -125,8 +125,8 @@ async function startBot() {
         const isFromMe = msg.key?.fromMe;
         const text = getText(msg);
 
-        // TRIGGER: Ketik !spam di chat target
-        if (text === '!spam' && isFromMe) {
+        // TRIGGER: Ketik !kerjayo di chat target
+        if (text === '!kerjayo' && isFromMe) {
             console.log(`[START] Mengirim 10 pesan ke ${jid} dengan jeda 10 detik per pesan.`);
 
             for (let i = 0; i < listPesan.length; i++) {
