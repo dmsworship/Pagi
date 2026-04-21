@@ -34,15 +34,15 @@ const question = (text) => new Promise(resolve => rl.question(text, resolve));
 // --- DAFTAR 10 TEKS BERBEDA ---
 const listPesan = [
     "Halo, ini pesan ke-1",
-    "Lagi apa di sana? (2)",
-    "Cek ombak dulu ya (3)",
-    "Jangan lupa istirahat (4)",
-    "Tes koneksi otomatis (5)",
-    "Sudah masuk pesannya? (6)",
-    "Running on Termux (7)",
-    "Hampir selesai bos (8)",
-    "Pesan ke-9 terkirim (9)",
-    "Selesai! 10 pesan tuntas (10)"
+    "Bagaimana harimu? (pesan 2)",
+    "Hanya mengecek koneksi (pesan 3)",
+    "Pesan otomatis dari bot (pesan 4)",
+    "Sudah makan belum? (pesan 5)",
+    "Tes sistem stabil (pesan 6)",
+    "Hampir sampai tujuan (pesan 7)",
+    "Pesan ke-8 terkirim (pesan 8)",
+    "Satu pesan lagi (pesan 9)",
+    "Selesai! 10 pesan tuntas (pesan 10)"
 ];
 
 const HISTORY_FILE = './nomor_testing.txt';
@@ -69,15 +69,22 @@ function getText(msg) {
     );
 }
 
-// Optimasi Fungsi Kirim: Tanpa delay tambahan agar bisa 1 detik per pesan
-async function quickSend(sock, jid, content) {
-    try {
-        // Kita hapus 'composing' agar tidak membuang waktu
-        await sock.sendMessage(jid, content);
-        return true;
-    } catch (e) {
-        return false;
+async function sendWithRetry(sock, jid, content, maxRetry = 5) {
+    let attempt = 0;
+    while (attempt < maxRetry) {
+        try {
+            await sock.sendPresenceUpdate('composing', jid);
+            await delay(800);
+            await sock.sendMessage(jid, content);
+            await sock.readMessages([{ remoteJid: jid }]);
+            return true;
+        } catch {
+            attempt++;
+            const delayTime = Math.pow(2, attempt) * 1000;
+            await delay(delayTime);
+        }
     }
+    return false;
 }
 
 async function startBot() {
@@ -105,7 +112,7 @@ async function startBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection } = update;
         if (connection === 'close') startBot();
-        if (connection === 'open') console.log('Bot terhubung!');
+        if (connection === 'open') console.log('Bot terhubung');
     });
 
     sock.ev.on('messages.upsert', async (m) => {
@@ -118,27 +125,27 @@ async function startBot() {
         const isFromMe = msg.key?.fromMe;
         const text = getText(msg);
 
-        // TRIGGER: Ketik !spam di chat target atau nomor sendiri
+        // TRIGGER: Ketik !spam di chat target
         if (text === '!spam' && isFromMe) {
-            console.log(`[START] Mengirim 10 pesan ke ${jid}`);
+            console.log(`[START] Mengirim 10 pesan ke ${jid} dengan jeda 10 detik per pesan.`);
 
             for (let i = 0; i < listPesan.length; i++) {
-                const startTime = Date.now();
-                
-                const ok = await quickSend(sock, jid, { text: listPesan[i] });
-                
-                if (ok) console.log(`[${i + 1}] Terkirim: ${listPesan[i]}`);
-                else console.log(`[${i + 1}] Gagal mengirim.`);
+                const ok = await sendWithRetry(sock, jid, { text: listPesan[i] });
 
-                // Menghitung sisa waktu agar pas 1 detik (1000ms)
-                const endTime = Date.now();
-                const executionTime = endTime - startTime;
-                const remainingDelay = Math.max(0, 1000 - executionTime);
-                
-                await delay(remainingDelay);
+                if (ok) {
+                    console.log(`[OK] Pesan ke-${i + 1} terkirim.`);
+                } else {
+                    console.log(`[FAIL] Pesan ke-${i + 1} gagal.`);
+                }
+
+                // Berhenti memberikan delay jika ini adalah pesan terakhir
+                if (i < listPesan.length - 1) {
+                    console.log("Menunggu 10 detik...");
+                    await delay(10000); // 10 detik jeda
+                }
             }
 
-            console.log(`[DONE] 10 pesan selesai dalam ~10 detik`);
+            console.log(`[DONE] Seluruh 10 pesan selesai dikirim.`);
         }
     });
 }
