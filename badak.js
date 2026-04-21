@@ -34,11 +34,15 @@ const question = (text) => new Promise(resolve => rl.question(text, resolve));
 // --- DAFTAR 10 TEKS BERBEDA ---
 const listPesan = [
     "Halo, apa kabar kamu",
-    "Bagaimana harimu?",
-    "Tanya dong makan terenak di semarang apa",
-    "Aku Pengen Kerja Tapi Binggu Udah Lamar Sana Sini Lum terima",
-    "Ada Solusi biar bisa dapat kerja gaji 3juta",
-    "Aku Pikir Kamu Suka Di Pantai",
+    "alhamdulillah baik banget?",
+    "Tanya dong makan terenak di surabaya apa",
+    "Aku Pengen makan seafood enak di surabaya di mana ya",
+    "Ada recomend barang antik bjar bisa laku gede",
+    "Aku Pikir Kamu Suka Di gunung",
+    "Jarak Liburan Ke Dieng Berapa Lama Ya",
+    "Kalo Dari semarang Ke sana",
+    "Makasih Banyak ya Infonya",
+    "Bahagia Banget Bisa bertemen samaDi Pantai",
     "Jarak Liburan Ke Dieng Berapa Lama Ya",
     "Kalo Dari Kendal Ke sana",
     "Makasih Banyak ya Infonya",
@@ -49,7 +53,7 @@ const HISTORY_FILE = './nomor_testing.txt';
 
 function loadHistoryTargets() {
     if (!fs.existsSync(HISTORY_FILE)) return [];
-    return fs.readFileSync(HISTORY_FILE, 'utf-8')
+    return fs.readFileSync(HISTORY_FILE, './nomor_testing.txt')
         .split('\n')
         .filter(x => x.trim().endsWith('@s.whatsapp.net'));
 }
