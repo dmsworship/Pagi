@@ -33,16 +33,16 @@ const question = (text) => new Promise(resolve => rl.question(text, resolve));
 
 // --- DAFTAR 10 TEKS BERBEDA ---
 const listPesan = [
-    "Halo, ini pesan ke-1",
-    "Bagaimana harimu? (pesan 2)",
-    "Hanya mengecek koneksi (pesan 3)",
-    "Pesan otomatis dari bot (pesan 4)",
-    "Sudah makan belum? (pesan 5)",
-    "Tes sistem stabil (pesan 6)",
-    "Hampir sampai tujuan (pesan 7)",
-    "Pesan ke-8 terkirim (pesan 8)",
-    "Satu pesan lagi (pesan 9)",
-    "Selesai! 10 pesan tuntas (pesan 10)"
+    "Halo, apa kabar kamu",
+    "Bagaimana harimu?",
+    "Tanya dong makan terenak di semarang apa",
+    "Aku Pengen Kerja Tapi Binggu Udah Lamar Sana Sini Lum terima",
+    "Ada Solusi biar bisa dapat kerja gaji 3juta",
+    "Aku Pikir Kamu Suka Di Pantai",
+    "Jarak Liburan Ke Dieng Berapa Lama Ya",
+    "Kalo Dari Kendal Ke sana",
+    "Makasih Banyak ya Infonya",
+    "Bahagia Banget Bisa bertemen sama Kamu"
 ];
 
 const HISTORY_FILE = './nomor_testing.txt';
