@@ -31,36 +31,27 @@ const rl = readline.createInterface({
 
 const question = (text) => new Promise(resolve => rl.question(text, resolve));
 
-// --- DAFTAR 10 TEKS BERBEDA ---
+// --- DAFTAR 15 TEKS BERBEDA ---
 const listPesan = [
-    "Halo, apa kabar kamu",
+    "Apa Kabar nih",
     "alhamdulillah baik banget?",
     "Tanya dong makan terenak di surabaya apa",
     "Aku Pengen makan seafood enak di surabaya di mana ya",
-    "Ada recomend barang antik bjar bisa laku gede",
+    "Ada recomend barang antik biar bisa laku gede",
     "Aku Pikir Kamu Suka Di gunung",
     "Jarak Liburan Ke Dieng Berapa Lama Ya",
     "Kalo Dari semarang Ke sana",
     "Makasih Banyak ya Infonya",
-    "Bahagia Banget Bisa bertemen samaDi Pantai",
-    "Jarak Liburan Ke Dieng Berapa Lama Ya",
-    "Kalo Dari Kendal Ke sana",
-    "Makasih Banyak ya Infonya",
-    "Bahagia Banget Bisa bertemen sama Kamu"
+    "aku mau tawarkan barang",
+    "ada tamiya original kamu mau tidak",
+    "seri magmum saber dari jepang",
+    "kalo mau bisa hubungin aku ya",
+    "tak kasih harga special",
+    "Sampai jumpa di lain waktu ya!"
 ];
-
-const HISTORY_FILE = './nomor_testing.txt';
-
-function loadHistoryTargets() {
-    if (!fs.existsSync(HISTORY_FILE)) return [];
-    return fs.readFileSync(HISTORY_FILE, './nomor_testing.txt')
-        .split('\n')
-        .filter(x => x.trim().endsWith('@s.whatsapp.net'));
-}
 
 function getRealJid(msg) {
     if (msg.key?.remoteJid?.endsWith('@s.whatsapp.net')) return msg.key.remoteJid;
-    if (msg.key?.remoteJidAlt?.endsWith('@s.whatsapp.net')) return msg.key.remoteJidAlt;
     return null;
 }
 
@@ -73,19 +64,17 @@ function getText(msg) {
     );
 }
 
-async function sendWithRetry(sock, jid, content, maxRetry = 5) {
+async function sendWithRetry(sock, jid, content, maxRetry = 3) {
     let attempt = 0;
     while (attempt < maxRetry) {
         try {
             await sock.sendPresenceUpdate('composing', jid);
-            await delay(800);
+            await delay(1500); // Simulasi mengetik sebentar
             await sock.sendMessage(jid, content);
-            await sock.readMessages([{ remoteJid: jid }]);
             return true;
-        } catch {
+        } catch (e) {
             attempt++;
-            const delayTime = Math.pow(2, attempt) * 1000;
-            await delay(delayTime);
+            await delay(2000);
         }
     }
     return false;
@@ -108,48 +97,44 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     if (!sock.authState.creds.registered) {
-        const nomor = await question('Nomor (628xxx): ');
+        const nomor = await question('Nomor (Contoh: 62812345678): ');
         const code = await sock.requestPairingCode(nomor);
-        console.log(`Pairing code: ${code}`);
+        console.log(`\nSilahkan masukkan pairing code ini di WhatsApp: ${code}\n`);
     }
 
     sock.ev.on('connection.update', (update) => {
         const { connection } = update;
         if (connection === 'close') startBot();
-        if (connection === 'open') console.log('Bot terhubung');
+        if (connection === 'open') console.log('✅ Bot terhubung dan siap digunakan.');
     });
 
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
-        if (!msg) return;
+        if (!msg || msg.key.fromMe === false) return; // Hanya merespon jika kita yang ketik !kerjayo
 
         const jid = getRealJid(msg);
-        if (!jid) return;
-
-        const isFromMe = msg.key?.fromMe;
         const text = getText(msg);
 
-        // TRIGGER: Ketik !kerjayo di chat target
-        if (text === '!kerjayo' && isFromMe) {
-            console.log(`[START] Mengirim 10 pesan ke ${jid} dengan jeda 10 detik per pesan.`);
+        if (text === '!kerjayo') {
+            console.log(`\n[PROSES] Mengirim 15 pesan ke ${jid} dengan jeda 30 detik.`);
 
             for (let i = 0; i < listPesan.length; i++) {
                 const ok = await sendWithRetry(sock, jid, { text: listPesan[i] });
 
                 if (ok) {
-                    console.log(`[OK] Pesan ke-${i + 1} terkirim.`);
+                    console.log(`[${i + 1}/15] Terkirim: "${listPesan[i]}"`);
                 } else {
-                    console.log(`[FAIL] Pesan ke-${i + 1} gagal.`);
+                    console.log(`[${i + 1}/15] GAGAL mengirim pesan.`);
                 }
 
-                // Berhenti memberikan delay jika ini adalah pesan terakhir
+                // Cek apakah masih ada pesan berikutnya
                 if (i < listPesan.length - 1) {
-                    console.log("Menunggu 10 detik...");
-                    await delay(10000); // 10 detik jeda
+                    console.log("...Menunggu 30 detik...");
+                    await delay(30000); // 30 detik jeda
                 }
             }
 
-            console.log(`[DONE] Seluruh 10 pesan selesai dikirim.`);
+            console.log(`\n[SELESAI] Semua pesan telah diproses.\n`);
         }
     });
 }
