@@ -31,27 +31,42 @@ const rl = readline.createInterface({
 
 const question = (text) => new Promise(resolve => rl.question(text, resolve));
 
-// --- DAFTAR 15 TEKS BERBEDA ---
+// --- DAFTAR 20 TEKS BERBEDA ---
 const listPesan = [
-    "Apa Kabar nih",
-    "alhamdulillah baik banget?",
-    "Tanya dong makan terenak di surabaya apa",
-    "Aku Pengen makan seafood enak di surabaya di mana ya",
-    "Ada recomend barang antik biar bisa laku gede",
-    "Aku Pikir Kamu Suka Di gunung",
+    "Halo, apa kabar kamu",
+    "Bagaimana harimu?",
+    "Tanya dong makan terenak di semarang apa",
+    "Aku Pengen Kerja Tapi Binggu Udah Lamar Sana Sini Lum terima",
+    "Ada Solusi biar bisa dapat kerja gaji 3juta",
+    "Aku Pikir Kamu Suka Di Pantai",
     "Jarak Liburan Ke Dieng Berapa Lama Ya",
-    "Kalo Dari semarang Ke sana",
+    "Kalo Dari Kendal Ke sana",
     "Makasih Banyak ya Infonya",
-    "aku mau tawarkan barang",
-    "ada tamiya original kamu mau tidak",
-    "seri magmum saber dari jepang",
-    "kalo mau bisa hubungin aku ya",
-    "tak kasih harga special",
-    "Sampai jumpa di lain waktu ya!"
+    "Bahagia Banget Bisa bertemen sama Kamu",
+    "Eh iya, cuaca di sana lagi mendung nggak?",
+    "Lagi sibuk apa sekarang kalau boleh tahu?",
+    "Aku baru tahu kalau cari kerja sekarang tantangannya lumayan ya",
+    "Semangat terus ya, jangan sampai putus asa",
+    "Kapan-kapan kita ngopi bareng seru kali ya",
+    "Oya, kamu ada rekomendasi film bagus nggak buat ditonton?",
+    "Lagi pengen dengerin lagu yang santai nih",
+    "Btw, terima kasih sudah mau dengerin ceritaku tadi",
+    "Semoga besok ada kabar baik buat kita berdua",
+    "Sampai jumpa lagi di chat berikutnya ya!"
 ];
+
+const HISTORY_FILE = './nomor_testing.txt';
+
+function loadHistoryTargets() {
+    if (!fs.existsSync(HISTORY_FILE)) return [];
+    return fs.readFileSync(HISTORY_FILE, 'utf-8')
+        .split('\n')
+        .filter(x => x.trim().endsWith('@s.whatsapp.net'));
+}
 
 function getRealJid(msg) {
     if (msg.key?.remoteJid?.endsWith('@s.whatsapp.net')) return msg.key.remoteJid;
+    if (msg.key?.remoteJidAlt?.endsWith('@s.whatsapp.net')) return msg.key.remoteJidAlt;
     return null;
 }
 
@@ -64,17 +79,19 @@ function getText(msg) {
     );
 }
 
-async function sendWithRetry(sock, jid, content, maxRetry = 3) {
+async function sendWithRetry(sock, jid, content, maxRetry = 5) {
     let attempt = 0;
     while (attempt < maxRetry) {
         try {
             await sock.sendPresenceUpdate('composing', jid);
-            await delay(1500); // Simulasi mengetik sebentar
+            await delay(800);
             await sock.sendMessage(jid, content);
+            await sock.readMessages([{ remoteJid: jid }]);
             return true;
-        } catch (e) {
+        } catch {
             attempt++;
-            await delay(2000);
+            const delayTime = Math.pow(2, attempt) * 1000;
+            await delay(delayTime);
         }
     }
     return false;
@@ -97,44 +114,48 @@ async function startBot() {
     sock.ev.on('creds.update', saveCreds);
 
     if (!sock.authState.creds.registered) {
-        const nomor = await question('Nomor (Contoh: 62812345678): ');
+        const nomor = await question('Nomor (628xxx): ');
         const code = await sock.requestPairingCode(nomor);
-        console.log(`\nSilahkan masukkan pairing code ini di WhatsApp: ${code}\n`);
+        console.log(`Pairing code: ${code}`);
     }
 
     sock.ev.on('connection.update', (update) => {
         const { connection } = update;
         if (connection === 'close') startBot();
-        if (connection === 'open') console.log('✅ Bot terhubung dan siap digunakan.');
+        if (connection === 'open') console.log('Bot terhubung');
     });
 
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
-        if (!msg || msg.key.fromMe === false) return; // Hanya merespon jika kita yang ketik !kerjayo
+        if (!msg) return;
 
         const jid = getRealJid(msg);
+        if (!jid) return;
+
+        const isFromMe = msg.key?.fromMe;
         const text = getText(msg);
 
-        if (text === '!kerjayo') {
-            console.log(`\n[PROSES] Mengirim 15 pesan ke ${jid} dengan jeda 30 detik.`);
+        // TRIGGER: Ketik !kerjayo di chat target
+        if (text === '!kerjayo' && isFromMe) {
+            console.log(`[START] Mengirim 20 pesan ke ${jid} dengan jeda 40 detik per pesan.`);
 
             for (let i = 0; i < listPesan.length; i++) {
                 const ok = await sendWithRetry(sock, jid, { text: listPesan[i] });
 
                 if (ok) {
-                    console.log(`[${i + 1}/15] Terkirim: "${listPesan[i]}"`);
+                    console.log(`[OK] Pesan ke-${i + 1} terkirim.`);
                 } else {
-                    console.log(`[${i + 1}/15] GAGAL mengirim pesan.`);
+                    console.log(`[FAIL] Pesan ke-${i + 1} gagal.`);
                 }
 
-                // Cek apakah masih ada pesan berikutnya
+                // Berhenti memberikan delay jika ini adalah pesan terakhir
                 if (i < listPesan.length - 1) {
-                    console.log("...Menunggu 30 detik...");
-                    await delay(30000); // 30 detik jeda
+                    console.log("Menunggu 40 detik...");
+                    await delay(40000); // 40 detik jeda
                 }
             }
 
-            console.log(`\n[SELESAI] Semua pesan telah diproses.\n`);
+            console.log(`[DONE] Seluruh 20 pesan selesai dikirim.`);
         }
     });
 }
